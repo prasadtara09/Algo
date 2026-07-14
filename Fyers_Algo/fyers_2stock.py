@@ -61,18 +61,12 @@ class FyersRateLimiter:
 limiter = FyersRateLimiter()
 
 def api_call(func, *args, **kwargs):
-    """Wrapper to route all Fyers calls through the rate limiter and log the request."""
+    """Wrapper to route all Fyers calls through the rate limiter."""
     limiter.wait_if_needed()
-    
     current_time = datetime.now().strftime("%H:%M:%S")
-    
-    # Extract the ticker symbol from the payload if it exists
-    symbol_log = ""
-    if "data" in kwargs and "symbol" in kwargs["data"]:
-        symbol_log = f" for {kwargs['data']['symbol']}"
+    symbol_log = f" for {kwargs['data']['symbol']}" if "data" in kwargs and "symbol" in kwargs["data"] else ""
         
     print(f"📡 [{current_time}] API Requesting: {func.__name__}{symbol_log}...")
-    
     return func(*args, **kwargs)
 
 # ==========================================
@@ -109,8 +103,6 @@ def get_indicators(ticker):
         raise ValueError(f"Unexpected API response: {response}")
         
     df = pd.DataFrame(response['candles'], columns=['ts', 'open', 'high', 'low', 'close', 'vol'])
-    
-    # Calculate indicators
     df['RSI'] = talib.RSI(df['close'], timeperiod=14)
     df['Upper'], df['Middle'], df['Lower'] = talib.BBANDS(df['close'], timeperiod=20, nbdevup=2, nbdevdn=2)
     return df.iloc[-1]
@@ -144,13 +136,13 @@ while True:
                         place_order(ticker, "SELL" if trade_state["side"] == "LONG" else "BUY")
                         active_trades[ticker] = {"active": False, "side": None}
                 
-                # 60-second delay between processing different tickers
-                print(f"⏳ Sleeping 60s before checking next ticker...")
-                time.sleep(60)
+                # 30-second delay between processing different tickers
+                print(f"⏳ Sleeping 30s before checking next ticker...")
+                time.sleep(30)
                 
         except Exception as e:
             print(f"❌ Error during execution: {e}")
-            time.sleep(60) # Brief pause on error to prevent API spamming
+            time.sleep(30) 
             
     else:
         print("Market closed. Bot sleeping for 5 minutes...")
