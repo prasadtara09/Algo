@@ -1,0 +1,3 @@
+pandas
+fyers-apiv3
+TA-Lib
