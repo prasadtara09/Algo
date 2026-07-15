@@ -1,6 +1,8 @@
 import pandas as pd
 import talib
 import time
+import csv
+import os
 from collections import deque
 from datetime import datetime, timedelta, time as dt_time
 from fyers_apiv3 import fyersModel
@@ -16,6 +18,13 @@ PAPER_TRADING = True  # SET TO FALSE ONLY WHEN READY FOR REAL MONEY
 
 fyers = fyersModel.FyersModel(client_id=CLIENT_ID, token=ACCESS_TOKEN)
 active_trades = {ticker: {"active": False, "side": None} for ticker in TICKERS}
+def log_backtest_pnl(ticker, side, entry, exit_price, pnl, timeframe):
+    file_exists = os.path.isfile('backtest_ledger.csv')
+    with open('backtest_ledger.csv', 'a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(['Timestamp', 'Ticker', 'Timeframe', 'Side', 'Entry', 'Exit', 'PnL_Percent'])
+        writer.writerow([datetime.now().strftime("%Y-%m-%d"), ticker, timeframe, side, entry, exit_price, pnl])
 
 # ==========================================
 # 2. RATE LIMITER INFRASTRUCTURE
@@ -126,14 +135,26 @@ while True:
                 if not trade_state["active"]:
                     if rsi < 30 and close <= lower:
                         place_order(ticker, "LONG") 
-                        active_trades[ticker] = {"active": True, "side": "LONG"}
+                        # Store entry price
+                        active_trades[ticker] = {"active": True, "side": "LONG", "entry": close}
                     elif rsi > 70 and close >= upper:
                         place_order(ticker, "SHORT")
-                        active_trades[ticker] = {"active": True, "side": "SHORT"}
+                        # Store entry price
+                        active_trades[ticker] = {"active": True, "side": "SHORT", "entry": close}
                 else:
                     if (trade_state["side"] == "LONG" and close >= middle) or \
                        (trade_state["side"] == "SHORT" and close <= middle):
                         place_order(ticker, "SELL" if trade_state["side"] == "LONG" else "BUY")
+                        
+                        # --- P&L CALCULATION ---
+                        entry_price = trade_state["entry"]
+                        pnl = (close - entry_price) if trade_state["side"] == "LONG" else (entry_price - close)
+                        pnl_pct = (pnl / entry_price) * 100
+                        
+                        # LOG THE TRADE TO CSV
+                        log_backtest_pnl(ticker, trade_state["side"], entry_price, close, round(pnl_pct, 2), "15m")
+                        
+                        print(f"✅ EXIT: {ticker} | PnL: {round(pnl_pct, 2)}%")
                         active_trades[ticker] = {"active": False, "side": None}
                 
                 # 30-second delay between processing different tickers
