@@ -11,20 +11,26 @@ from fyers_apiv3 import fyersModel
 # 1. CONFIGURATION
 # ==========================================
 CLIENT_ID = "91I39L89HO-100"
-ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiZDoxIiwiZDoyIiwieDowIiwieDoxIiwieDoyIl0sImF0X2hhc2giOiJnQUFBQUFCcVZ2ckFNZTNUVUtPRXEwcUluREV6Zm5lMlJMRmN2enNFWVhaZWxIUnpMX0I1NnJvemZzX2xSTFNfZW1hbzA4VGN1U1I4OEZwUEt2eUQ3TFhhaHE5Q3VxTmNBLW1nWjBMcmsxa2dNSHNLRTZ4cXRxUT0iLCJkaXNwbGF5X25hbWUiOiIiLCJvbXMiOiJLMSIsImhzbV9rZXkiOiJmMzE3NjkzMDk2Y2E5MTExYmFlNWE3YjFiNDg3OGI0NmI4NTNmOTAwMzVjYjNkZWRlZGM4YmNhOCIsImlzRGRwaUVuYWJsZWQiOiJOIiwiaXNNdGZFbmFibGVkIjoiTiIsImZ5X2lkIjoiWFQwNjczOCIsImFwcFR5cGUiOjEwMCwiZXhwIjoxNzg0MTYxODAwLCJpYXQiOjE3ODQwODUxODQsImlzcyI6ImFwaS5meWVycy5pbiIsIm5iZiI6MTc4NDA4NTE4NCwic3ViIjoiYWNjZXNzX3Rva2VuIn0.Ch5tkOsXUzcR79EfUmD1XU7yxN1wcOB-Yl8URvm1oGY"
+ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiZDoxIiwiZDoyIiwieDowIiwieDoxIiwieDoyIl0sImF0X2hhc2giOiJnQUFBQUFCcVZ2ckFNZTNUVUtPRXEwcUluREV6Zm5lMlJMRmN2enNFWVhaZWxIUnpMX0I1NnJvemZzX2xSTFNfZW1hbzA4VGN1U1I4OEZwUEt2eUQ3TFhhaHE5Q3VxTmNBLW1nWjBMcmsxa2dNSHNLRTZ4cXRxUT0iLCJkaXNwbGF5X25hbWUiOiIiLCJvbXMiOiJLMSIsImhzbV9rZXkiOiJmMzE3NjkzMDk2Y2E5MTExYmFlNWE3YjFiNDg3OGI0NmI4NTNmOTAwMzVjYjNkZWRlZGM4YmNhOCIsImlzRGRwaUVuYWJsZWQiOiJOIiwiaXNNdGZFbmFibGVkIjoiTiIsImZ5X2lkIjoiWFQwNjczOCIsImFwcFR5cGUiOjEwMCwiZXhwIjoxNzg0MTYxODAwLCJpYXQiOjE3ODQwODUxODQsImlzcyI6ImFwaS5meWVycy5pbiIsIm5iZiI6MTc4NDA4NTE4NCwic3ViIjoiYWNjZXNzX3Rva2VuIn0.Ch5tkOsXUzcR79EfUmD1XU7yxN1wcOB-Yl8URvm1oGY" # ⚠️ REMEMBER TO REGENERATE YOUR TOKEN
 TICKERS = ["NSE:EASEMYTRIP-EQ", "NSE:IDEA-EQ"] 
 QTY = 10
 PAPER_TRADING = True  # SET TO FALSE ONLY WHEN READY FOR REAL MONEY
 
 fyers = fyersModel.FyersModel(client_id=CLIENT_ID, token=ACCESS_TOKEN)
 active_trades = {ticker: {"active": False, "side": None} for ticker in TICKERS}
-def log_backtest_pnl(ticker, side, entry, exit_price, pnl, timeframe):
+
+def log_backtest_pnl(ticker, side, entry, exit_price, pnl_pct, pnl_abs, timeframe):
+    """
+    Logs the trade outcome to a CSV. 
+    pnl_abs is the raw currency amount required by the Monte Carlo simulator.
+    """
     file_exists = os.path.isfile('backtest_ledger.csv')
     with open('backtest_ledger.csv', 'a', newline='') as f:
         writer = csv.writer(f)
         if not file_exists:
-            writer.writerow(['Timestamp', 'Ticker', 'Timeframe', 'Side', 'Entry', 'Exit', 'PnL_Percent'])
-        writer.writerow([datetime.now().strftime("%Y-%m-%d"), ticker, timeframe, side, entry, exit_price, pnl])
+            # Added PnL_Absolute column for the Quant Simulator
+            writer.writerow(['Timestamp', 'Ticker', 'Timeframe', 'Side', 'Entry', 'Exit', 'PnL_Percent', 'PnL_Absolute'])
+        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticker, timeframe, side, entry, exit_price, pnl_pct, pnl_abs])
 
 # ==========================================
 # 2. RATE LIMITER INFRASTRUCTURE
@@ -39,30 +45,25 @@ class FyersRateLimiter:
     def wait_if_needed(self):
         now = time.time()
         
-        # Clean up old timestamps from the windows
         while self.second_window and now - self.second_window[0] >= 1:
             self.second_window.popleft()
         while self.minute_window and now - self.minute_window[0] >= 60:
             self.minute_window.popleft()
 
-        # 3. Daily Limit Check (100,000)
         if self.daily_calls >= 100000:
             raise Exception("❌ CRITICAL: Daily API limit reached (100,000). Shutting down.")
 
-        # 2. Per Minute Limit Check (200)
         if len(self.minute_window) >= 195: 
             sleep_time = 60 - (now - self.minute_window[0])
             print(f"⏳ Minute limit nearing. Throttling API for {sleep_time:.2f}s...")
             time.sleep(max(0.1, sleep_time))
             now = time.time()
 
-        # 1. Per Second Limit Check (10)
         if len(self.second_window) >= 9: 
             sleep_time = 1 - (now - self.second_window[0])
             time.sleep(max(0.1, sleep_time))
             now = time.time()
 
-        # Record the successful call
         self.second_window.append(now)
         self.minute_window.append(now)
         self.daily_calls += 1
@@ -135,29 +136,33 @@ while True:
                 if not trade_state["active"]:
                     if rsi < 30 and close <= lower:
                         place_order(ticker, "LONG") 
-                        # Store entry price
                         active_trades[ticker] = {"active": True, "side": "LONG", "entry": close}
                     elif rsi > 70 and close >= upper:
                         place_order(ticker, "SHORT")
-                        # Store entry price
                         active_trades[ticker] = {"active": True, "side": "SHORT", "entry": close}
                 else:
                     if (trade_state["side"] == "LONG" and close >= middle) or \
                        (trade_state["side"] == "SHORT" and close <= middle):
                         place_order(ticker, "SELL" if trade_state["side"] == "LONG" else "BUY")
                         
-                        # --- P&L CALCULATION ---
+                        # --- MODIFIED P&L CALCULATION ---
                         entry_price = trade_state["entry"]
-                        pnl = (close - entry_price) if trade_state["side"] == "LONG" else (entry_price - close)
-                        pnl_pct = (pnl / entry_price) * 100
+                        
+                        # Points gained or lost per share
+                        points_captured = (close - entry_price) if trade_state["side"] == "LONG" else (entry_price - close)
+                        
+                        # Percentage PnL
+                        pnl_pct = (points_captured / entry_price) * 100
+                        
+                        # Absolute PnL (Points * Quantity) -> This is what the Quant Simulator needs!
+                        pnl_absolute = points_captured * QTY
                         
                         # LOG THE TRADE TO CSV
-                        log_backtest_pnl(ticker, trade_state["side"], entry_price, close, round(pnl_pct, 2), "15m")
+                        log_backtest_pnl(ticker, trade_state["side"], entry_price, close, round(pnl_pct, 2), round(pnl_absolute, 2), "15m")
                         
-                        print(f"✅ EXIT: {ticker} | PnL: {round(pnl_pct, 2)}%")
+                        print(f"✅ EXIT: {ticker} | PnL: {round(pnl_pct, 2)}% | Absolute ₹: {round(pnl_absolute, 2)}")
                         active_trades[ticker] = {"active": False, "side": None}
                 
-                # 30-second delay between processing different tickers
                 print(f"⏳ Sleeping 30s before checking next ticker...")
                 time.sleep(30)
                 

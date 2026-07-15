@@ -1,6 +1,8 @@
 import pandas as pd
 import talib
 import time
+import csv
+import os
 from collections import deque
 from datetime import datetime, timedelta, time as dt_time
 from fyers_apiv3 import fyersModel
@@ -9,13 +11,22 @@ from fyers_apiv3 import fyersModel
 # 1. CONFIGURATION
 # ==========================================
 CLIENT_ID = "91I39L89HO-100"
-ACCESS_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJhdWQiOlsiZDoxIiwiZDoyIiwieDowIiwieDoxIiwieDoyIl0sImF0X2hhc2giOiJnQUFBQUFCcVZ2ckFNZTNUVUtPRXEwcUluREV6Zm5lMlJMRmN2enNFWVhaZWxIUnpMX0I1NnJvemZzX2xSTFNfZW1hbzA4VGN1U1I4OEZwUEt2eUQ3TFhhaHE5Q3VxTmNBLW1nWjBMcmsxa2dNSHNLRTZ4cXRxUT0iLCJkaXNwbGF5X25hbWUiOiIiLCJvbXMiOiJLMSIsImhzbV9rZXkiOiJmMzE3NjkzMDk2Y2E5MTExYmFlNWE3YjFiNDg3OGI0NmI4NTNmOTAwMzVjYjNkZWRlZGM4YmNhOCIsImlzRGRwaUVuYWJsZWQiOiJOIiwiaXNNdGZFbmFibGVkIjoiTiIsImZ5X2lkIjoiWFQwNjczOCIsImFwcFR5cGUiOjEwMCwiZXhwIjoxNzg0MTYxODAwLCJpYXQiOjE3ODQwODUxODQsImlzcyI6ImFwaS5meWVycy5pbiIsIm5iZiI6MTc4NDA4NTE4NCwic3ViIjoiYWNjZXNzX3Rva2VuIn0.Ch5tkOsXUzcR79EfUmD1XU7yxN1wcOB-Yl8URvm1oGY"
+ACCESS_TOKEN = "YOUR_MASKED_TOKEN_HERE" # ⚠️ REMEMBER TO REGENERATE YOUR TOKEN
 TICKER = "NSE:EASEMYTRIP-EQ"
 QTY = 10
 PAPER_TRADING = True  # SET TO FALSE ONLY WHEN READY FOR REAL MONEY
 POLLING_INTERVAL = 30 # Seconds between strategy checks
 
 fyers = fyersModel.FyersModel(client_id=CLIENT_ID, token=ACCESS_TOKEN)
+
+def log_backtest_pnl(ticker, side, entry, exit_price, pnl_pct, pnl_abs, timeframe):
+    """Logs the trade outcome to a CSV for the Monte Carlo Simulator."""
+    file_exists = os.path.isfile('backtest_ledger.csv')
+    with open('backtest_ledger.csv', 'a', newline='') as f:
+        writer = csv.writer(f)
+        if not file_exists:
+            writer.writerow(['Timestamp', 'Ticker', 'Timeframe', 'Side', 'Entry', 'Exit', 'PnL_Percent', 'PnL_Absolute'])
+        writer.writerow([datetime.now().strftime("%Y-%m-%d %H:%M:%S"), ticker, timeframe, side, entry, exit_price, pnl_pct, pnl_abs])
 
 # ==========================================
 # 2. RATE LIMITER INFRASTRUCTURE
@@ -64,10 +75,8 @@ def api_call(func, *args, **kwargs):
     """Wrapper to route all Fyers calls through the rate limiter and log the request."""
     limiter.wait_if_needed()
     
-    # --- ADDED THESE TWO LINES ---
     current_time = datetime.now().strftime("%H:%M:%S")
     print(f"📡 [{current_time}] API Requesting: {func.__name__}...")
-    # -----------------------------
     
     return func(*args, **kwargs)
 
@@ -118,6 +127,7 @@ def get_indicators():
 print(f"🚀 Bot Initialized. Paper Trading: {PAPER_TRADING}")
 trade_active = False
 trade_side = None
+trade_entry_price = 0.0  # Added to track entry for PnL calculation
 
 while True:
     now = datetime.now().time()
@@ -131,13 +141,28 @@ while True:
                 if rsi < 30 and close <= lower:
                     place_order("LONG")
                     trade_active, trade_side = True, "LONG"
+                    trade_entry_price = close
                 elif rsi > 70 and close >= upper:
                     place_order("SHORT")
                     trade_active, trade_side = True, "SHORT"
+                    trade_entry_price = close
             else:
                 if (trade_side == "LONG" and close >= middle) or (trade_side == "SHORT" and close <= middle):
                     place_order("SELL" if trade_side == "LONG" else "BUY")
+                    
+                    # --- P&L CALCULATION ---
+                    points_captured = (close - trade_entry_price) if trade_side == "LONG" else (trade_entry_price - close)
+                    pnl_pct = (points_captured / trade_entry_price) * 100
+                    pnl_absolute = points_captured * QTY
+                    
+                    # LOG THE TRADE TO CSV
+                    log_backtest_pnl(TICKER, trade_side, trade_entry_price, close, round(pnl_pct, 2), round(pnl_absolute, 2), "15m")
+                    print(f"✅ EXIT: {TICKER} | PnL: {round(pnl_pct, 2)}% | Absolute ₹: {round(pnl_absolute, 2)}")
+                    
+                    # Reset variables for the next trade
                     trade_active = False
+                    trade_side = None
+                    trade_entry_price = 0.0
                     
         except Exception as e:
             print(f"❌ Error during execution: {e}")
