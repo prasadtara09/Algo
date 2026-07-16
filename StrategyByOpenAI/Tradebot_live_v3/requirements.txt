@@ -1,0 +1,10 @@
+fyers-apiv3
+pandas
+numpy
+python-dotenv
+plotly
+streamlit
+apscheduler
+sqlalchemy
+pyarrow
+pytest
