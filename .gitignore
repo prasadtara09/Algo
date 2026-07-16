@@ -1,0 +1,38 @@
+# macOS and IDE files
+.DS_Store
+.vscode/
+.idea/
+
+# Python bytecode, virtual environments, and test/tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated runtime data, logs, and local databases
+cache/
+reports/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+
+# Downloaded archives and temporary files
+*.zip
+*.tmp
+*.bak
