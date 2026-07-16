@@ -21,8 +21,9 @@ class BacktestEngine:
         self.completed_trades = []
         pending_signal = None
 
-        # A current candle can create a signal only after it closes. It fills
-        # at the next candle's open, avoiding close-price look-ahead bias.
+        # The current candle can create a signal only after it closes.  It is
+        # therefore filled at the next candle's open, avoiding close-price
+        # look-ahead bias.
         for i in range(MIN_LOOKBACK, len(df)):
             candle = df.iloc[i]
 
@@ -43,8 +44,10 @@ class BacktestEngine:
                 position = self.trade_manager.enter_trade(pending_signal)
                 pending_signal = None
 
-                # If both levels are reached in this entry bar, TradeManager
-                # checks the stop first, which is the conservative assumption.
+                # An order filled at this bar's open can also reach its stop
+                # or target within the same bar. Stop is evaluated first by
+                # TradeManager, which is the conservative assumption when the
+                # intrabar path is unknown.
                 if position:
                     trade = self.trade_manager.manage_trade(position, candle)
                     if trade:
@@ -53,6 +56,7 @@ class BacktestEngine:
             if not self.portfolio.has_position(symbol) and pending_signal is None and i < len(df) - 1:
                 pending_signal = strategy_engine.check_entry(symbol, df, i)
 
+        # Include open positions in reports instead of silently dropping them.
         if self.portfolio.has_position(symbol):
             position = self.portfolio.get(symbol)
             final_candle = df.iloc[-1]

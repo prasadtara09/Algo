@@ -32,7 +32,7 @@ trades = engine.run(
 
 print()
 
-report = export(trades)
+report = export(trades, INITIAL_CAPITAL)
 
 print(report)
 

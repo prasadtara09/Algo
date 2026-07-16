@@ -18,11 +18,7 @@ class TradeManager:
         if self.portfolio.has_position(signal.symbol):
             return None
 
-        if not self.risk.can_take_trade(
-            self.portfolio,
-            self.account,
-            signal.timestamp,
-        ):
+        if not self.risk.can_take_trade(self.portfolio):
             return None
 
         qty = self.risk.calculate_position_size(
@@ -130,7 +126,7 @@ class TradeManager:
         )
 
         # Update account balance
-        self.account.book_profit(position.pnl, exit_time)
+        self.account.book_profit(position.pnl)
 
         # These lines were incorrectly indented outside the function previously
         position.active = False

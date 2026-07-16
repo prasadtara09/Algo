@@ -14,7 +14,7 @@ from indicators.vwap import vwap
 
 
 def apply_indicators(df):
-    """Add indicator values that were available when each candle closed."""
+    """Add only historical indicator values available when each candle closes."""
     df = df.copy()
     if not isinstance(df.index, pd.DatetimeIndex):
         raise ValueError("Market data must use a DatetimeIndex")
