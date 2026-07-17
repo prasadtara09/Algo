@@ -34,8 +34,8 @@ class TradeManager:
         if qty == 0:
             return None
 
-        risk = signal.entry - signal.stoploss
-        reward = signal.target - signal.entry
+        risk = abs(signal.entry - signal.stoploss)
+        reward = abs(signal.target - signal.entry)
 
         rr = round(reward / risk, 2) if risk != 0 else 0
 
@@ -44,7 +44,7 @@ class TradeManager:
             side=signal.side,
             quantity=qty,
             entry_price=round(
-                signal.entry * (1 + SLIPPAGE),
+                signal.entry * (1 + SLIPPAGE if signal.side == "BUY" else 1 - SLIPPAGE),
                 2,
             ),
             stoploss=signal.stoploss,
@@ -61,17 +61,17 @@ class TradeManager:
         return position
 
     def manage_trade(self, position, candle):
-        if candle["High"] > position.highest_price:
-            position.highest_price = candle["High"]
+        # First evaluate stops/targets that existed at the *start* of this
+        # candle. Updating a trailing stop from this candle's high and then
+        # testing it against this candle's low assumes an unknowable price
+        # order inside the bar and creates look-ahead bias.
+        stop_hit = candle["Low"] <= position.stoploss if position.side == "BUY" else candle["High"] >= position.stoploss
+        target_hit = candle["High"] >= position.target if position.side == "BUY" else candle["Low"] <= position.target
 
-        if candle["Low"] < position.lowest_price:
-            position.lowest_price = candle["Low"]
+        if stop_hit:
 
-        self.update_trailing_stop(position)
-
-        if candle["Low"] <= position.stoploss:
-
-            if position.stoploss > position.initial_stoploss:
+            trailing = position.stoploss > position.initial_stoploss if position.side == "BUY" else position.stoploss < position.initial_stoploss
+            if trailing:
                 reason = "TRAILING_STOP"
             else:
                 reason = "INITIAL_STOPLOSS"
@@ -83,7 +83,7 @@ class TradeManager:
                 reason,
             )
 
-        if candle["High"] >= position.target:
+        if target_hit:
             return self.close_trade(
                 position,
                 position.target,
@@ -91,37 +91,44 @@ class TradeManager:
                 "TARGET",
             )
 
+        # A newly observed high can tighten the stop only for later candles.
+        if candle["High"] > position.highest_price:
+            position.highest_price = candle["High"]
+
+        if candle["Low"] < position.lowest_price:
+            position.lowest_price = candle["Low"]
+
+        self.update_trailing_stop(position)
+
         return None
 
     def update_trailing_stop(self, position):
-        new_stop = position.highest_price - (position.atr * 2.5)
-
-        if new_stop > position.stoploss:
-            position.stoploss = round(new_stop, 2)
+        if position.side == "BUY":
+            new_stop = position.highest_price - (position.atr * 2.5)
+            if new_stop > position.stoploss:
+                position.stoploss = round(new_stop, 2)
+        else:
+            new_stop = position.lowest_price + (position.atr * 2.5)
+            if new_stop < position.stoploss:
+                position.stoploss = round(new_stop, 2)
 
     def close_trade(self, position, exit_price, exit_time, reason):
         position.exit_price = round(
-            exit_price * (1 - SLIPPAGE),
+            exit_price * (1 - SLIPPAGE if position.side == "BUY" else 1 + SLIPPAGE),
             2,
         )
         position.exit_time = exit_time
         position.exit_reason = reason
 
-        position.pnl = (position.exit_price - position.entry_price) * position.quantity
+        direction = 1 if position.side == "BUY" else -1
+        position.pnl = direction * (position.exit_price - position.entry_price) * position.quantity
 
         brokerage = BROKERAGE_PER_ORDER * 2
 
         position.pnl -= brokerage
 
-        risk = (
-            position.entry_price
-            - position.initial_stoploss
-        )
-
-        reward = (
-            position.exit_price
-            - position.entry_price
-        )
+        risk = abs(position.entry_price - position.initial_stoploss)
+        reward = direction * (position.exit_price - position.entry_price)
 
         position.rr = (
             round(reward / risk, 2)
@@ -152,8 +159,8 @@ class TradeManager:
             exit_reason=position.exit_reason,
             atr=position.atr,
             risk_reward=round(
-                (position.target - position.entry_price)
-                / (position.entry_price - position.initial_stoploss),
+                abs(position.target - position.entry_price)
+                / abs(position.entry_price - position.initial_stoploss),
                 2,
             ),
         )

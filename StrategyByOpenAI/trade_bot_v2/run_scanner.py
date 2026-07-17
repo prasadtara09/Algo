@@ -38,6 +38,7 @@ def main():
     stats = scanner.last_scan_stats
     print(
         f"Scan summary: {stats['scanned']} scanned, {stats['missing_data']} missing data, "
+        f"{stats['filtered_out']} filtered out, {stats['outside_entry_window']} outside the entry window, "
         f"{stats['errors']} errors out of {stats['requested']} symbols."
     )
     if SCANNER_CACHE_ONLY and stats["missing_data"]:

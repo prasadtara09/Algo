@@ -4,7 +4,7 @@ import os
 
 # 1. Download Data (Example: Reliance Industries)
 print("Fetching market data...")
-price_data = yf.download("IDEA.NS", start="2025-01-01", end="2026-07-01")['Close']
+price_data = yf.download("IDEA.NS", start="2021-01-01", end="2026-07-01")['Close']
 
 # 2. Define Indicators
 fast_ma = vbt.MA.run(price_data, window=10)

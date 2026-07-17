@@ -1,4 +1,12 @@
-from config import SCANNER_CACHE_ONLY, TIMEFRAME
+from datetime import datetime
+
+from config import (
+    INTRADAY_ENTRY_START,
+    INTRADAY_LAST_ENTRY,
+    INTRADAY_ONLY,
+    SCANNER_CACHE_ONLY,
+    TIMEFRAME,
+)
 from data.cache import load_cache
 from data.loader import get_data
 
@@ -16,7 +24,18 @@ class Scanner:
     def __init__(self):
 
         self.engine = StrategyEngine()
-        self.last_scan_stats = {"requested": 0, "scanned": 0, "missing_data": 0, "errors": 0}
+        self.last_scan_stats = {
+            "requested": 0, "scanned": 0, "missing_data": 0,
+            "outside_entry_window": 0, "filtered_out": 0, "errors": 0,
+        }
+
+    @staticmethod
+    def _is_entry_time(timestamp):
+        if not INTRADAY_ONLY:
+            return True
+        start = datetime.strptime(INTRADAY_ENTRY_START, "%H:%M").time()
+        end = datetime.strptime(INTRADAY_LAST_ENTRY, "%H:%M").time()
+        return start <= timestamp.time() <= end
 
     def _load_data(self, symbol):
         if SCANNER_CACHE_ONLY:
@@ -62,7 +81,10 @@ class Scanner:
     def scan_latest(self, symbols, limit=None):
         """Return at most one actionable signal per symbol from its last bar."""
         signals = []
-        self.last_scan_stats = {"requested": len(symbols), "scanned": 0, "missing_data": 0, "errors": 0}
+        self.last_scan_stats = {
+            "requested": len(symbols), "scanned": 0, "missing_data": 0,
+            "outside_entry_window": 0, "filtered_out": 0, "errors": 0,
+        }
 
         for symbol in symbols:
             try:
@@ -73,6 +95,11 @@ class Scanner:
 
                 df = apply_indicators(data)
                 if df.empty or not basic_filter(df):
+                    self.last_scan_stats["filtered_out"] += 1
+                    continue
+
+                if not self._is_entry_time(df.index[-1]):
+                    self.last_scan_stats["outside_entry_window"] += 1
                     continue
 
                 self.last_scan_stats["scanned"] += 1

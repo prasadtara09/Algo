@@ -10,6 +10,14 @@ import pandas as pd
 import plotly.express as px
 import streamlit as st
 
+from config import (
+    INTRADAY_ENTRY_START,
+    INTRADAY_LAST_ENTRY,
+    INTRADAY_SQUARE_OFF,
+    MAX_OPEN_POSITIONS,
+    MAX_TRADES_PER_SYMBOL_PER_DAY,
+)
+
 
 REPORTS_DIR = Path("reports")
 
@@ -35,7 +43,13 @@ def currency(value):
 def main():
     st.set_page_config(page_title="Trade Bot Dashboard", page_icon="📈", layout="wide")
     st.title("Trade Bot Dashboard")
-    st.caption("Backtest and paper-trading reports only — no live order controls.")
+    st.caption("Two-sided intraday scanner for research and paper trading only — no live order controls.")
+
+    settings = st.columns(4)
+    settings[0].metric("Maximum parallel holdings", MAX_OPEN_POSITIONS)
+    settings[1].metric("Max trades / stock / day", MAX_TRADES_PER_SYMBOL_PER_DAY)
+    settings[2].metric("Entry window", f"{INTRADAY_ENTRY_START}–{INTRADAY_LAST_ENTRY}")
+    settings[3].metric("Square-off", INTRADAY_SQUARE_OFF)
 
     metrics = read_metrics()
     trades = read_csv("trades.csv")
@@ -59,7 +73,7 @@ def main():
                 st.plotly_chart(px.line(equity, x="Time", y="Equity", title="Equity curve"), use_container_width=True)
 
     with scanner:
-        st.caption("Signals use the latest completed candle and all configured filters.")
+        st.caption("BUY = confirmed resistance breakout; SELL = confirmed support breakdown. Both require trend, VWAP, ADX, volume, candle-quality, and breakout-distance checks.")
         if signals.empty:
             st.info("No current signals meet every filter. Refresh the universe, then run `python run_scanner.py`.")
         else:

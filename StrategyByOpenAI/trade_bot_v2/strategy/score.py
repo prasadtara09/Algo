@@ -1,24 +1,39 @@
-from config import ADX_MIN, RSI_MAX, RSI_MIN, VOLUME_MULTIPLIER
+"""Directional quality score for the intraday breakout strategy."""
+
+from config import (
+    ADX_MIN,
+    RSI_MAX,
+    RSI_MIN,
+    SHORT_RSI_MAX,
+    SHORT_RSI_MIN,
+    VOLUME_MULTIPLIER,
+)
 
 
-def calculate_score(row):
-    """Score a long setup; the breakout itself is checked by the strategy."""
+def calculate_score(row, side):
+    """Return a score and reasons for either a BUY or SELL setup."""
+    is_long = side == "BUY"
     score = 0
     details = []
 
-    if row["EMA20"] > row["EMA50"]:
+    def directional(above):
+        return above if is_long else not above
+
+    if directional(row["EMA20"] > row["EMA50"]):
         score += 20
         details.append("LTF_TREND")
-    if row["HTF_EMA_FAST"] > row["HTF_EMA_SLOW"]:
+    if directional(row["HTF_EMA_FAST"] > row["HTF_EMA_SLOW"]):
         score += 25
         details.append("HTF_TREND")
-    if row["Close"] > row["EMA20"]:
+    if directional(row["Close"] > row["EMA20"]):
         score += 10
-        details.append("PRICE_ABOVE_EMA")
-    if row["Close"] > row["VWAP"]:
+        details.append("PRICE_VS_EMA")
+    if directional(row["Close"] > row["VWAP"]):
         score += 15
-        details.append("ABOVE_VWAP")
-    if RSI_MIN <= row["RSI"] <= RSI_MAX:
+        details.append("PRICE_VS_VWAP")
+
+    rsi_ok = RSI_MIN <= row["RSI"] <= RSI_MAX if is_long else SHORT_RSI_MIN <= row["RSI"] <= SHORT_RSI_MAX
+    if rsi_ok:
         score += 10
         details.append("RSI")
     if row["ADX"] >= ADX_MIN:

@@ -6,7 +6,7 @@ from backtest.metrics import Metrics
 from backtest.report import export
 from indicators.indicator_engine import apply_indicators
 
-symbol = "RELIANCE.NS"
+symbol = "ASHOKLEY.NS"
 
 print("Loading Data...")
 
