@@ -1,0 +1,62 @@
+# macOS and IDE files
+.DS_Store
+.vscode/
+.idea/
+
+# Python bytecode, virtual environments, and test/tool caches
+__pycache__/
+*.py[cod]
+*$py.class
+.venv/
+venv/
+env/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.hypothesis/
+.tox/
+.nox/
+.pyre/
+.pytype/
+.ipynb_checkpoints/
+.coverage
+coverage.xml
+htmlcov/
+
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Generated runtime data, logs, and local databases
+cache/
+reports/
+logs/
+*.log
+*.db
+*.sqlite
+*.sqlite3
+*.pid
+
+# Downloaded archives and temporary files
+*.zip
+*.tar
+*.tar.gz
+*.gz
+*.whl
+*.tmp
+*.bak
+*.swp
+*.swo
+*~
+
+# Build, packaging, and local tool artifacts
+build/
+dist/
+site/
+*.egg-info/
+.eggs/
+pip-wheel-metadata/
+.cache/
