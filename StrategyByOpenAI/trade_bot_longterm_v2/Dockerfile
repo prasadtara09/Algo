@@ -1,0 +1,41 @@
+FROM python:3.12-slim
+
+# Keep the container paper-only by default. Credentials are supplied at runtime
+# through --env-file; this image never copies a .env file or AWS credentials.
+ENV PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PIP_NO_CACHE_DIR=1 \
+    MODE=PAPER
+
+WORKDIR /app
+
+# tzdata supplies Asia/Kolkata for the strategy's market-session calculations.
+RUN apt-get update \
+    && apt-get install --no-install-recommends -y tzdata \
+    && rm -rf /var/lib/apt/lists/* \
+    && useradd --create-home --shell /usr/sbin/nologin tradebot
+
+COPY requirements.txt ./
+RUN pip install --requirement requirements.txt
+
+# Explicit copies prevent .env, AWS credentials, local reports, caches, and
+# virtual environments from being placed in the image.
+COPY *.py ./
+COPY backtest ./backtest
+COPY broker ./broker
+COPY core ./core
+COPY data ./data
+COPY execution ./execution
+COPY indicators ./indicators
+COPY scanner ./scanner
+COPY strategy ./strategy
+
+RUN mkdir -p cache database logs reports \
+    && chown -R tradebot:tradebot /app
+
+USER tradebot
+
+# Continuous, data-only paper monitoring. By default, this reads
+# reports/swing_rotation_targets.csv produced by the NIFTY scan container.
+# It cannot submit an FYERS order.
+CMD ["python", "run_fyers_stream.py"]
